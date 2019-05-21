@@ -88,65 +88,22 @@ final
 
 
 https://www.sportsbookreviewsonline.com/scoresoddsarchives/mlb/mlboddsarchives.htm
-https://stackoverflow.com/questions/43476819/not-able-to-scrape-a-second-table-within-a-page-using-rvest
 
-```{r Scraping}
 
-urlbbref <- read_html("https://www.baseball-reference.com/leagues/MLB/2018.shtml")
-# First table is in the markup
-table_one <- xml_find_all(urlbbref, "//table") %>% html_table
 
-# Additional tables are within the comment tags, ie <!-- tables -->
-# Which is why your xpath is missing them.
-# First get the commented nodes
-alt_tables <- xml2::xml_find_all(urlbbref,"//comment()") %>% {
-#Find only commented nodes that contain the regex for html table markup
-  raw_parts <- as.character(.[grep("\\</?table", as.character(.))])
-# Remove the comment begin and end tags
-  strip_html <- stringi::stri_replace_all_regex(raw_parts, c("<\\!--","-->"),c("",""),
-                                                vectorize_all = FALSE)
-# Loop through the pieces that have tables within markup and 
-# apply the same functions
-  lapply(grep("<table", strip_html, value = TRUE), function(i){
-    rvest::html_table(xml_find_all(read_html(i), "//table")) %>% 
-      .[[1]]
-  })
-}
-# Put all the data frames into a list.
-all_tables <- c(
-  table_one, alt_tables
-) 
-pitchingdf <- as.data.frame(all_tables[3])
 
-colnames(pitchingdf)[7] <- c("WinPCT")
 
-pitchingdf$ERA <- as.numeric(pitchingdf$ERA)
-pitchingdf$W <- as.numeric(pitchingdf$W)
-pitchingdf$L <- as.numeric(pitchingdf$L)
-pitchingdf$WinPCT <- as.numeric(pitchingdf$WinPCT)
-
-pitchingdf
-```
 No that we have enough data we want to find the most predictive variables on wether a team will win or lose a game not yet played.
 The first step is to visualize and run regressions on the variables.
 
 RAG - Runs Allowed Per Game
 Quality Starts - Starting pitcher allowed 3 or fewer than earned runs and pitched 6 or more innings
 
-  mulr <- lm(formula = Win ~ lag(modeled$Runs)*lag(modeled$RunsAllowed), data = modeled)
-  mulrtidy <- mulr %>% tidy()
-mulrtidy
+
 
 
 
 ```{r, Data Visualization And Regressions}
-pitchingdf %>%
-  ggplot(aes(x=ERA,y=WinPCT)) +
-    geom_point() + 
-    geom_smooth(method=lm) +
-  ylim(0, 1) +   labs(title="Earned Runs Allowed Effect on Win Percentage",
-         x = "ERA",
-         y = "Win Percentage")
 
 p2<- final %>%
   group_by(Team)%>%
@@ -191,10 +148,49 @@ plot1 <-final %>%
     geom_smooth(method=lm)
 
 
+plot3 <-final %>%
+  filter(Team == "ARI" || Team == "BAL")%>%
+  ggplot(aes(x=lastTenMR, y = Win, color = Team)) +
+    geom_point() + 
+    geom_smooth(method=lm)
+
+
 final %>%
   filter(Team == "ARI" || Team == "BAL")%>%
   ggplot(aes(x=lag(RunsAllowed), y = MoneyLine, color = Team)) +
     geom_point() + 
     geom_smooth(method=lm)
-grid.arrange(plot1, plot2, ncol=2)
+grid.arrange(plot1, plot2, plot3, ncol=3)
+```
+
+
+
+
+
+
+```{R, Regressions}
+final <- final %>%
+  group_by(Team)
+
+  mulr <- lm(formula = final$Win ~ lag(Runs)*lag(RunsAllowed), data = final)
+  mulrtidy <- mulr %>% tidy()
+mulrtidy
+
+
+  mulr1 <- lm(formula = final$Win ~ (lastTenMR)*(lastTenMRA), data = final)
+  mulrtidy1 <- mulr1 %>% tidy()
+mulrtidy1
+
+
+multr <- lm(formula = MoneyLine ~ (lastTenMR)*(lastTenMRA), data = final)
+multrst <- multr %>% tidy()
+multrst
+
+
+
+
+multreg <- lm(formula = MoneyLine ~ lag(Runs)*lag(RunsAllowed), data = final)
+multregst <- multreg %>% tidy()
+multregst
+
 ```
