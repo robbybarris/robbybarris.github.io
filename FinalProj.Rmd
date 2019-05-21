@@ -20,7 +20,7 @@ Sources:
 https://www.retrosheet.org/gamelogs/index.html
 
 Libraries
-```{r Libraries}
+```{r Libraries, echo=FALSE}
 library(tidyverse)
 library(lubridate)
 library(dplyr)
@@ -81,8 +81,7 @@ final <- final %>%
 mutate(lastTenMRA = rollsumr(RunsAllowed, k = 10, fill = NA)/10) %>%
   mutate(lastTenMR = rollsumr(Runs, k = 10, fill = NA)/10) %>%
   arrange(Game)
-
-final
+final <- unique(final[,1:12])
 ```
 
 
@@ -194,3 +193,20 @@ multregst <- multreg %>% tidy()
 multregst
 
 ```
+
+```{r, Logistic Regression}
+  
+logit <- glm(final$Win~final$lastTenMRA,family="binomial")
+
+
+pred <- predict(logit,newdata=data)
+probs <- exp(pred)/(1+exp(pred))
+
+probs <- as.data.frame(probs)
+probs$Row <- seq.int(nrow(probs))
+
+prob <- merge(final, probs, by="Row")
+prob
+```
+
+
