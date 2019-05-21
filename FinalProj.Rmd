@@ -1,0 +1,200 @@
+---
+title: "Predicting Baseball Games Against Gambling Lines"
+author: "Robert Barris, Shivam Patel"
+date: "5/18/2019"
+output: pdf_document
+---
+
+
+This notebook will model a few baseball statistics to determine if we can predict future performance, win or loss, of a team at a time.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Important: 
+    The information used here was obtained free of
+     charge from and is copyrighted by Retrosheet.  Interested
+     parties may contact Retrosheet at "www.retrosheet.org".
+
+Sources: 
+
+https://www.retrosheet.org/gamelogs/index.html
+
+Libraries
+```{r Libraries}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(caret)
+library(zoo)
+library(rvest)
+library(ggplot2)
+library(broom)
+library(gridExtra)
+library(plotly)
+```
+
+
+
+
+
+```{r Data Curation}
+csv_file <- "~/Desktop/CMSC320/FinalProject/BBData.csv"
+bdata <- read_csv(csv_file)
+colnames(bdata)[3] <- c("VisitingTeam")
+colnames(bdata)[6] <- c("HomeTeam")
+colnames(bdata)[5] <- c("VTGameNumber")
+colnames(bdata)[8] <- c("HTGameNumber")
+colnames(bdata)[9] <- c("VTScore")
+colnames(bdata)[10] <- c("HTScore")
+colnames(bdata)[12] <- c("ParkID")
+colnames(bdata)[13] <- c("VTPitchersUsed")
+colnames(bdata)[14] <- c("VTIndivEarnedRuns")
+colnames(bdata)[15] <- c("VTTeamEarnedRuns")
+colnames(bdata)[16] <- c("HTPitchersUsed")
+colnames(bdata)[17] <- c("HTIndivEarnedRuns")
+colnames(bdata)[18] <- c("HTTeamEarnedRuns")
+colnames(bdata)[19] <- c("VTStartingPitcherID")
+colnames(bdata)[20] <- c("VTStartingPitcherName")
+colnames(bdata)[21] <- c("HTStartingPitcherID")
+colnames(bdata)[22] <- c("HTStartingPitcherName")
+colnames(bdata)[23] <- c("FullData")
+bdata <- mutate(bdata, WinningTeam = ifelse( bdata$VTScore<  bdata$HTScore, bdata$HomeTeam, bdata$VisitingTeam))
+bdata <- mutate(bdata, HomeWin = ifelse(bdata$WinningTeam == bdata$HomeTeam, 1, 0))
+bdata <- mutate(bdata, VTWin = ifelse(bdata$WinningTeam == bdata$HomeTeam, 1, 0)) 
+away <- data.frame(Date = bdata$Date, Team = bdata$VisitingTeam, Game = bdata$VTGameNumber, Runs = bdata$VTScore, RunsAllowed = bdata$HTScore, Win = bdata$VTWin, stringsAsFactors=FALSE)
+home <- data.frame(Date = bdata$Date, Team = bdata$HomeTeam, Game = bdata$HTGameNumber, Runs = bdata$HTScore, RunsAllowed = bdata$VTScore, Win = bdata$HomeWin, stringsAsFactors=FALSE)
+
+goodData <- rbind(away,home)
+
+
+
+odds <- "~/Desktop/CMSC320/FinalProject/2018odds.csv"
+oddsdf <- read_csv(odds)
+oddsdf$Date <- gsub("(^\\d{1})(\\d{2})","\\1/\\2/18", oddsdf$Date)
+
+
+wanted_data <- data.frame(Date = oddsdf$Date, Team = oddsdf$Team, Pitcher = oddsdf$Pitcher, MoneyLine = oddsdf$Open, OU = oddsdf$`Open OU`, Spread = oddsdf$RL)
+
+final <- merge(wanted_data, goodData, by=c("Date", "Team"))
+final <- final %>%
+  group_by(Team) %>%
+mutate(lastTenMRA = rollsumr(RunsAllowed, k = 10, fill = NA)/10) %>%
+  mutate(lastTenMR = rollsumr(Runs, k = 10, fill = NA)/10) %>%
+  arrange(Game)
+
+final
+```
+
+
+
+https://www.sportsbookreviewsonline.com/scoresoddsarchives/mlb/mlboddsarchives.htm
+https://stackoverflow.com/questions/43476819/not-able-to-scrape-a-second-table-within-a-page-using-rvest
+
+```{r Scraping}
+
+urlbbref <- read_html("https://www.baseball-reference.com/leagues/MLB/2018.shtml")
+# First table is in the markup
+table_one <- xml_find_all(urlbbref, "//table") %>% html_table
+
+# Additional tables are within the comment tags, ie <!-- tables -->
+# Which is why your xpath is missing them.
+# First get the commented nodes
+alt_tables <- xml2::xml_find_all(urlbbref,"//comment()") %>% {
+#Find only commented nodes that contain the regex for html table markup
+  raw_parts <- as.character(.[grep("\\</?table", as.character(.))])
+# Remove the comment begin and end tags
+  strip_html <- stringi::stri_replace_all_regex(raw_parts, c("<\\!--","-->"),c("",""),
+                                                vectorize_all = FALSE)
+# Loop through the pieces that have tables within markup and 
+# apply the same functions
+  lapply(grep("<table", strip_html, value = TRUE), function(i){
+    rvest::html_table(xml_find_all(read_html(i), "//table")) %>% 
+      .[[1]]
+  })
+}
+# Put all the data frames into a list.
+all_tables <- c(
+  table_one, alt_tables
+) 
+pitchingdf <- as.data.frame(all_tables[3])
+
+colnames(pitchingdf)[7] <- c("WinPCT")
+
+pitchingdf$ERA <- as.numeric(pitchingdf$ERA)
+pitchingdf$W <- as.numeric(pitchingdf$W)
+pitchingdf$L <- as.numeric(pitchingdf$L)
+pitchingdf$WinPCT <- as.numeric(pitchingdf$WinPCT)
+
+pitchingdf
+```
+No that we have enough data we want to find the most predictive variables on wether a team will win or lose a game not yet played.
+The first step is to visualize and run regressions on the variables.
+
+RAG - Runs Allowed Per Game
+Quality Starts - Starting pitcher allowed 3 or fewer than earned runs and pitched 6 or more innings
+
+  mulr <- lm(formula = Win ~ lag(modeled$Runs)*lag(modeled$RunsAllowed), data = modeled)
+  mulrtidy <- mulr %>% tidy()
+mulrtidy
+
+
+
+```{r, Data Visualization And Regressions}
+pitchingdf %>%
+  ggplot(aes(x=ERA,y=WinPCT)) +
+    geom_point() + 
+    geom_smooth(method=lm) +
+  ylim(0, 1) +   labs(title="Earned Runs Allowed Effect on Win Percentage",
+         x = "ERA",
+         y = "Win Percentage")
+
+p2<- final %>%
+  group_by(Team)%>%
+  ggplot(aes(x=lag(RunsAllowed), y = MoneyLine, color = Win)) +
+    geom_point() + 
+    geom_smooth(method=lm) + 
+  labs(title="Previous Game Runs Allowed Effect on Vegas Money Line",
+         x = "Previous Game Runs Allowed",
+         y = "Money Line")
+
+p1 <- final %>%
+  group_by(Team)%>%
+  ggplot(aes(x=lag(Runs), y = MoneyLine, color = Win)) +
+
+    geom_point() + 
+    geom_smooth(method=lm) + 
+  labs(title="Previous Game Runs Effect on Vegas Money Line",
+         x = "Previous Game Runs",
+         y = "Money Line")
+
+grid.arrange(p1,p2, ncol = 2)
+
+
+final %>%
+  group_by(Team)%>%
+  ggplot(aes(x=lag(Runs), y = Win, color = MoneyLine)) +
+    geom_point() + 
+    geom_smooth(method=lm)
+
+
+plot2 <- final %>%
+filter(Team == "ARI" || Team == "BAL")%>%
+  ggplot(aes(x=MoneyLine, y = Win, color = Team)) +
+    geom_point() + 
+    geom_smooth(method=lm)
+
+
+plot1 <-final %>%
+  filter(Team == "ARI" || Team == "BAL")%>%
+  ggplot(aes(x=lastTenMRA, y = Win, color = Team)) +
+    geom_point() + 
+    geom_smooth(method=lm)
+
+
+final %>%
+  filter(Team == "ARI" || Team == "BAL")%>%
+  ggplot(aes(x=lag(RunsAllowed), y = MoneyLine, color = Team)) +
+    geom_point() + 
+    geom_smooth(method=lm)
+grid.arrange(plot1, plot2, ncol=2)
+```
