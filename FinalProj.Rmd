@@ -33,9 +33,9 @@ library(gridExtra)
 library(plotly)
 ```
 
+The purpose of our final project is to determine if we can predict the outcome of a baseball game, by using data from recent games that the teams playing have produced. We will see if our predictions are sound enough to go with or against the Money Line. A Money Line bet is much one of the simplest bests you can place on a team. The bet placed on a team is whether that team will win the game. This differs from a spread as that requires that one team will win or lose by a specific number of runs, points or goals, depending on the sport, of course. If the Money Line is negative that is the amount that you would have to bet in order to win $100, and if the number is positive that is how much you would win on a $100 bet. Money Lines do not require that you bet that specific amount, but it would use the ratio of what you bet to your expected winnings. Given any baseball game, one team will always have a positive Money Line and one team will always have a negative Money Line. This indicates which team is favored for that particular game.
 
-
-
+For the purpose of this project, we will assess these teams using specifically their last ten games, and a variety of statistics for those games, including but not limited to run scored and allowed, who pitched through the games and who started, where each game was, who they played against, etc. We will then create a regression to see if this data has any correlation to the success of the team with respect to the provided Money Line. This information will tell us whether it is a good idea to bet on a particular team given the specific Money Line and the likelihood of success for that team. We hope to be able to evaluate the Money Line and create a high probability that we will correctly predict the outcome of the games. Of course, this not always have a one hundred percent success rate, but our goal is be able to maximize profits by utilizing data from the teams recent games.  
 
 ```{r Data Curation}
 csv_file <- "~/Desktop/CMSC320/FinalProject/BBData.csv"
@@ -89,14 +89,12 @@ final <- unique(final[,1:12])
 https://www.sportsbookreviewsonline.com/scoresoddsarchives/mlb/mlboddsarchives.htm
 
 
-
-
-
-No that we have enough data we want to find the most predictive variables on wether a team will win or lose a game not yet played.
+Now that we have enough data, we want to find the most predictive variables on whether a team will win or lose a game not yet played.
 The first step is to visualize and run regressions on the variables.
 
 RAG - Runs Allowed Per Game
 Quality Starts - Starting pitcher allowed 3 or fewer than earned runs and pitched 6 or more innings
+
 
 
 
@@ -163,7 +161,7 @@ grid.arrange(plot1, plot2, plot3, ncol=3)
 ```
 
 
-
+These plots include data on previous game runs allowed and scored against the money line for those games. For this we look at two teams in particular. We will look at the Arizona Diamondbacks and the Baltimore Orioles. We plot these two teams to show how their number of wins correlate to their Money Lines, last ten games, and how their Money Line compares to their number of runs allowed. This information will be critical to see how the success of a team, particularly these two, has an effect on their Money Line for their games.
 
 
 
@@ -194,6 +192,8 @@ multregst
 
 ```
 
+The regressions are calculated in a number of ways. The first formula is derived from the amount of runs the teams have scored and given up on average. The second formula is derived from taking this data but only for the last ten games. This is because we want to see if data from recent games can predict the success of a team in the future and how that compares to the Money Line, which our last formula calculates. This formula is derived from the runs allowed and scored but in relation to the Money Line. Based on the outputs we can assess that the only statistically significant p-value, where p less than or equal to .05, comes from the team’s average runs allowed by a team in their last ten games specifically. The remainder of the outputs produce a p-value that is not statistically significant, as p is greater than .05. Given that the p-value is less than .05 for average runs allowed in the last ten games, we will use this statistic moving forward to see its overall impact. 
+
 ```{r, Logistic Regression}
   
 logit <- glm(final$Win~final$lastTenMRA,family="binomial")
@@ -208,5 +208,19 @@ probs$Row <- seq.int(nrow(probs))
 prob <- merge(final, probs, by="Row")
 prob
 ```
+The final part of this project compiles the average runs allowed for the last ten games, every week. Updating it weekly, essentially dropping the oldest week and considering the newest week. The purpose of choosing average runs allowed for the last ten games, as opposed to another statistic is because it is the most statistically significant. We made this distinction, as it was the statistic with a p-value that was less than or equal to .05. We made these calculations above. Given that, we disregarded the other statistics and assessed it just on the team’s average runs allowed in their last ten games. 
+
+
+
+Conclusion:
+
+Based on our results we have concluded that using data from recent games is not a good indicator of how a team will perform in the future. This contradicts the media’s perspective on how teams will do in games that are upcoming as well as the Money Line numbers itself. It is not enough to say it would be a necessarily good idea to bet on the underdog team in certain games as the Money Line bets are derived from how good one team is compared to another. The greater the difference in the positive and negative number in the Money Line, the lower the likelihood that the underdog team is going to win. Statistically, you have a very high probability of winning a bet if you choose the favored team, especially if they are favored by a lot. However, the earnings from such bets are much smaller than if the bet is placed on the underdog. 
+
+Given the data provided and our experiments, we have concluded that you cannot accurately predict when the underdog is going to win to some extent. This is because most likely because each game is independent of one another, and you cannot extensively use statistics from how the underdog team has performed against different opponents to conclude that they are going to win a certain game. Based on our regression they only statistic that would help you predict that outcome of a game is the average runs allowed by a team in their last ten games. However, this is not enough to solely assess a team’s chances of winning a game. This is only a small identifier and it is not a strong enough statistic do make an entire prediction based on that alone. 
+
+
+
+
+
 
 
